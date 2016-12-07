@@ -23,14 +23,17 @@ class Node():
         else:
             return (self.val < node2.val)
 
-    def __str__(self):
-        return "(" + self.val + ")"
+    def __repr__(self):
+        return "(" + str(self.val) + ")"
 
 class BinomialHeap():
     def __init__(self, roots):
         # Binomial heap is just a list of root nodes.
         self.roots = roots
-    
+        # Union with empty heap forces a heapify operation.
+        if len(self.roots) > 0:
+            self.union(BinomialHeap([]))
+
     def bubble(self, node):
         # Resorts the tree that node belongs to by 'bubbling' it up the tree.
         if node.parent is None:
@@ -130,9 +133,20 @@ class BinomialHeap():
         
         self.roots = newroots
 
+printtree(root):
+    # Prints the tree with root as the root
+    pass
+
+
 x0 = Node(0)
 x1 = Node(1)
 x2 = Node(2)
+x3 = Node(3)
+x4 = Node(4)
+x5 = Node(5)
 heap = BinomialHeap([x0,x1,x2])
-heap.union(BinomialHeap([]))
 print(heap.roots)
+
+heap.insert(x3)
+print(heap.roots)
+print(heap.extractmin())
