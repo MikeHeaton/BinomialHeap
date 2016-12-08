@@ -15,18 +15,18 @@ input= input.filter(function(elt){
 
 /* We build a DAG representing the data. Nodes are the words; there is an
 edge from a -> b iff score(a) > score(b) && b is one letter away from a.*/
-var lookup={};
-var wordscores= {};
+var lookup = {};
+var wordscores = {};
 
-// Creating the Word Scores dictionary.
+// Create the Word Scores dictionary.
 input.forEach(function(elt){
   eltlet= elt.split('');
   wordscores[elt]= eltlet.map(function(let){
     return dict[let]}).reduce(function(a,b){return a+b},0);
 })
 
-// Creating edges: the dictionary 'lookup' maps an element to all of its
-// successors.
+// Create edges: the dictionary 'lookup' is an edge dictionary mapping
+// an element to all of its successors (as defined above).
 input.forEach(function(elt){
     lookup[elt]= [];
     var allthesmallers= input.filter(function(melt){
@@ -36,27 +36,6 @@ input.forEach(function(elt){
       return isedge(elt,melt)
     })
 })
-
-/* Now we have the DAG.
-A word ladder is a pair of sequences emanating from the same node, with the
-same length and no nodes in common. (Except the starting node.)
-We search for these by looping through each starting node in turn,
-collecting all of the sequences starting at the node, then analysing them
-in pairs to see whether they form valid word ladders.
-*/
-var bestscore = 0
-for (middleword in wordscores){
-  var score_for_middleword = wordscores[middleword]
-  var all_sequences = find_sequences(middleword);
-  if (all_sequences.length > 1){
-    var split_sequences = split_sequences_by_length(all_sequences)
-    score_for_middleword = wordscores[middleword] + compare_sequences(split_sequences)
-  }
-  bestscore = Math.max(bestscore, score_for_middleword)
-}
-
-console.log(bestscore)
-  //process.stdout.write(
 
 function isedge(a,b){
   a= a.split('');
@@ -68,43 +47,75 @@ function isedge(a,b){
   return ctr==1;
 }
 
+/* Now we have the DAG.
+A word ladder is a pair of sequences emanating from the same node, with the
+same length and no nodes in common (except the starting node.)
+We search for these by looping through each starting node in turn,
+collecting all of the sequences starting at the node, then analysing them
+in pairs to see whether they form valid word ladders.
+*/
+var overall_bestscore = 0
+// Loop over the "emanating" nodes.
+for (middleword in wordscores){
+  var newbestscore = find_sequences(middleword);
+  overall_bestscore = Math.max(overall_bestscore, newbestscore)
+}
+
+process.stdout.write(overall_bestscore)
 
 
-//object wth keys which are dictionary words; values are arrays of successors
-function find_sequences(maxword){
-  var queue = [[]]
+//---------------Functions for implementing the search-------------------//
+function find_sequences(middleword){
+  var queue = []
   var all_sequences = []
+  var currentlength = 0
+  var bestscore = wordscores[middleword]
+  var seqs_to_check = []
 
+  lookup[middleword].forEach(function(child){
+    queue.push([child]);
+    seqs_to_check.push([child]);
+  })
+  bestscore = Math.max(best_ladder_score(seqs_to_check) + wordscores[middleword], bestscore)
+
+  // Search the DAG 'breadth-first' to generate chains.
+  // Because we go breadth-first, the chains are generated in length order and
+  // so each set of chains held in seqs_to_check will be the same length.
   while(queue.length > 0){
-    var currentseq = queue.pop()
-    if(currentseq.length == 0){
-      lookup[maxword].forEach(function(child){
-        queue.push([child])
-        all_sequences.push([child])
-      })
-    } else {
-      lookup[currentseq[currentseq.length-1]].forEach(function(child){
-        queue.push(currentseq.concat([child]))
-        all_sequences.push(currentseq.concat([child]))
-      })
+
+    var seqs_to_check = []
+    var newqueue = []
+    for (var i=0; i<queue.length; i++){
+      currentseq = queue[i]
+      for (var j=0; j< lookup[currentseq[currentseq.length-1]].length; j++){
+        child = lookup[currentseq[currentseq.length-1]][j];
+        newqueue.push(currentseq.concat([child]));
+        seqs_to_check.push(currentseq.concat([child]));
+        }
     }
+    queue = newqueue
+    bestscore = Math.max(best_ladder_score(seqs_to_check) + wordscores[maxword], bestscore)
   }
-  return all_sequences
+  return bestscore
 }
 
 function array_score(a){
+  // Score how many total points are in a sequence.
   return a.reduce(function(score, v){return score + wordscores[v]}, 0)
 }
 
-function find_best_ladder(sequences_of_one_length){
+function best_ladder_score(sequences_of_one_length){
+  // Compare sequences to each other to find the highest scoring pair of
+  // non-overlapping sequences.
   bestscore = 0
   pairs = []
   for(var i=0; i<sequences_of_one_length.length; i++){
     for(var j=i+1; j<sequences_of_one_length.length; j++){
+
       intersection = sequences_of_one_length[i].filter(function(n) {
                         return sequences_of_one_length[j].indexOf(n) != -1;
                         });
-      if (intersection.length==0){
+      if (intersection.length == 0){
         bestscore = Math.max(bestscore, array_score(sequences_of_one_length[i]) + array_score(sequences_of_one_length[j]))
       }
     }
@@ -112,55 +123,4 @@ function find_best_ladder(sequences_of_one_length){
   return bestscore
 }
 
-function compare_sequences(sequences_by_length){
-  bestscore = 0
-  sequences_by_length.forEach(function(length_array){
-    pairs = []
-    for(var i=0; i<length_array.length; i++){
-      for(var j=i+1; j<length_array.length; j++){
-        intersection = length_array[i].filter(function(n) {
-                          return length_array[j].indexOf(n) != -1;
-                          });
-        if (intersection.length==0){
-          bestscore = Math.max(bestscore, array_score(length_array[i]) + array_score(length_array[j]))
-        }
-      }
-    }
-  })
-  return bestscore
 }
-
-function split_sequences_by_length(list_of_sequences){
-  list_of_sequences = list_of_sequences.sort(function (a, b) { return b.length - a.length });
-  var maxlength = list_of_sequences[0].length
-  var outputs = []
-  for(var i = 0; i<maxlength; i++){outputs.push([])}
-  list_of_sequences.forEach(function(seq){outputs[seq.length-1].push(seq)})
-  return outputs
-}
-
-}
-testinput = `2
-20
-A
-AD
-APPLE
-AX
-AY
-BAG
-BAT
-BO
-CONCERTO
-CORNUCOPIA
-EX
-LEWIS
-MOATS
-PI
-RA
-QUESTION
-QUORA
-WONDERLAND
-ZA
-ZOOLOGY`
-
-processData(testinput)
